@@ -96,6 +96,10 @@ export default function AdminRelatorios() {
         if (filtros.status) params.append('status', filtros.status);
       }
 
+      if (tipo === 'pacientes') {
+        params.append('limite', filtros.limite);
+      }
+
       const response = await adminApi.get(`/relatorios/pdf/${tipo}?${params}`, {
         responseType: 'blob'
       });
@@ -238,15 +242,13 @@ export default function AdminRelatorios() {
               {loading ? 'Gerando...' : 'Gerar Relatório'}
             </button>
 
-            {(activeTab === 'consultas' || activeTab === 'medicos') && (
-              <button
-                onClick={() => downloadPDF(activeTab)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <DocumentArrowDownIcon className="w-5 h-5" />
-                Exportar PDF
-              </button>
-            )}
+            <button
+              onClick={() => downloadPDF(activeTab)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <DocumentArrowDownIcon className="w-5 h-5" />
+              Exportar PDF
+            </button>
           </div>
         </div>
       </div>

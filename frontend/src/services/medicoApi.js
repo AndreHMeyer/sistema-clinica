@@ -25,7 +25,10 @@ medicoApi.interceptors.request.use(
 medicoApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Não redireciona se for erro de login (credenciais inválidas)
+    const isLoginRequest = error.config?.url?.includes('/login');
+    
+    if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('medicoToken');
       localStorage.removeItem('medico');
       window.location.href = '/medico/login';

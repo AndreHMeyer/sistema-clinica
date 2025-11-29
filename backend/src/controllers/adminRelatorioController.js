@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const PDFDocument = require('pdfkit');
+const { validators } = require('../middlewares/security');
 
 // ==========================================
 // RELATÓRIO DE CONSULTAS POR PERÍODO
@@ -8,8 +9,29 @@ exports.relatorioConsultasPeriodo = async (req, res) => {
   try {
     const { dataInicio, dataFim, medicoId, especialidadeId, status } = req.query;
 
+    // Validações de entrada
     if (!dataInicio || !dataFim) {
       return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
+    }
+
+    // Validar formatos de data
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    // Validar IDs se fornecidos
+    if (medicoId && !validators.isValidId(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
+
+    if (especialidadeId && !validators.isValidId(especialidadeId)) {
+      return res.status(400).json({ error: 'ID de especialidade inválido' });
+    }
+
+    // Validar status se fornecido
+    const statusValidos = ['agendada', 'remarcada', 'realizada', 'cancelada', 'falta', 'concluida', 'nao_compareceu'];
+    if (status && !statusValidos.includes(status)) {
+      return res.status(400).json({ error: 'Status inválido' });
     }
 
     let query = `
@@ -83,8 +105,14 @@ exports.relatorioMedicos = async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
 
+    // Validações de entrada
     if (!dataInicio || !dataFim) {
       return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
+    }
+
+    // Validar formatos de data
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
     }
 
     const [relatorio] = await db.query(`
@@ -124,8 +152,14 @@ exports.relatorioEspecialidades = async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
 
+    // Validações de entrada
     if (!dataInicio || !dataFim) {
       return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
+    }
+
+    // Validar formatos de data
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
     }
 
     const [relatorio] = await db.query(`
@@ -163,9 +197,18 @@ exports.relatorioPacientesFrequentes = async (req, res) => {
   try {
     const { dataInicio, dataFim, limite } = req.query;
 
+    // Validações de entrada
     if (!dataInicio || !dataFim) {
       return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
     }
+
+    // Validar formatos de data
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    // Validar e limitar o parâmetro limite (máximo 100)
+    const limiteNum = Math.min(Math.max(parseInt(limite) || 20, 1), 100);
 
     const [relatorio] = await db.query(`
       SELECT 
@@ -185,7 +228,7 @@ exports.relatorioPacientesFrequentes = async (req, res) => {
       HAVING COUNT(c.id) > 0
       ORDER BY total_consultas DESC
       LIMIT ?
-    `, [dataInicio, dataFim, parseInt(limite) || 20]);
+    `, [dataInicio, dataFim, limiteNum]);
 
     return res.json({
       relatorio,
@@ -205,8 +248,14 @@ exports.relatorioCancelamentos = async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
 
+    // Validações de entrada
     if (!dataInicio || !dataFim) {
       return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
+    }
+
+    // Validar formatos de data
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
     }
 
     // Taxa geral
@@ -273,8 +322,29 @@ exports.gerarPDFConsultas = async (req, res) => {
   try {
     const { dataInicio, dataFim, medicoId, especialidadeId, status } = req.query;
 
+    // Validações de entrada
     if (!dataInicio || !dataFim) {
       return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
+    }
+
+    // Validar formatos de data
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    // Validar IDs se fornecidos
+    if (medicoId && !validators.isValidId(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
+
+    if (especialidadeId && !validators.isValidId(especialidadeId)) {
+      return res.status(400).json({ error: 'ID de especialidade inválido' });
+    }
+
+    // Validar status se fornecido
+    const statusValidos = ['agendada', 'remarcada', 'realizada', 'cancelada', 'falta', 'concluida', 'nao_compareceu'];
+    if (status && !statusValidos.includes(status)) {
+      return res.status(400).json({ error: 'Status inválido' });
     }
 
     let query = `
@@ -398,8 +468,14 @@ exports.gerarPDFMedicos = async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
 
+    // Validações de entrada
     if (!dataInicio || !dataFim) {
       return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
+    }
+
+    // Validar formatos de data
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
     }
 
     const [relatorio] = await db.query(`
@@ -478,6 +554,290 @@ exports.gerarPDFMedicos = async (req, res) => {
 
   } catch (error) {
     console.error('Erro ao gerar PDF de médicos:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+};
+
+// ==========================================
+// GERAR PDF - RELATÓRIO DE ESPECIALIDADES
+// ==========================================
+exports.gerarPDFEspecialidades = async (req, res) => {
+  try {
+    const { dataInicio, dataFim } = req.query;
+
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
+    }
+
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    const [relatorio] = await db.query(`
+      SELECT 
+        e.nome as especialidade,
+        COUNT(DISTINCT m.id) as total_medicos,
+        COUNT(c.id) as total_consultas,
+        SUM(CASE WHEN c.status = 'concluida' THEN 1 ELSE 0 END) as concluidas,
+        SUM(CASE WHEN c.status = 'cancelada' THEN 1 ELSE 0 END) as canceladas,
+        ROUND(SUM(CASE WHEN c.status = 'cancelada' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(c.id), 0), 1) as taxa_cancelamento
+      FROM especialidades e
+      LEFT JOIN medicos m ON e.id = m.especialidade_id AND m.ativo = TRUE
+      LEFT JOIN consultas c ON m.id = c.medico_id 
+        AND c.data_consulta BETWEEN ? AND ?
+      WHERE e.ativo = TRUE
+      GROUP BY e.id, e.nome
+      ORDER BY total_consultas DESC
+    `, [dataInicio, dataFim]);
+
+    const doc = new PDFDocument({ margin: 50 });
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=relatorio-especialidades-${dataInicio}-${dataFim}.pdf`);
+    
+    doc.pipe(res);
+
+    doc.fontSize(20).text('Clínica Saúde+', { align: 'center' });
+    doc.fontSize(14).text('Relatório por Especialidade', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(10).text(`Período: ${formatDate(dataInicio)} a ${formatDate(dataFim)}`, { align: 'center' });
+    doc.moveDown(2);
+
+    const tableTop = doc.y;
+    
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text('Especialidade', 50, tableTop);
+    doc.text('Médicos', 200, tableTop);
+    doc.text('Total', 260, tableTop);
+    doc.text('Concluídas', 320, tableTop);
+    doc.text('Canceladas', 400, tableTop);
+    doc.text('Taxa Canc.', 480, tableTop);
+    
+    doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+
+    let y = tableTop + 25;
+    doc.font('Helvetica').fontSize(8);
+
+    for (const esp of relatorio) {
+      if (y > 700) {
+        doc.addPage();
+        y = 50;
+      }
+
+      doc.text(esp.especialidade.substring(0, 25), 50, y);
+      doc.text(String(esp.total_medicos || 0), 200, y);
+      doc.text(String(esp.total_consultas || 0), 260, y);
+      doc.text(String(esp.concluidas || 0), 320, y);
+      doc.text(String(esp.canceladas || 0), 400, y);
+      doc.text(`${esp.taxa_cancelamento || 0}%`, 480, y);
+      
+      y += 15;
+    }
+
+    doc.fontSize(8).text(
+      `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+      50, 750, { align: 'center' }
+    );
+
+    doc.end();
+
+  } catch (error) {
+    console.error('Erro ao gerar PDF de especialidades:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+};
+
+// ==========================================
+// GERAR PDF - PACIENTES FREQUENTES
+// ==========================================
+exports.gerarPDFPacientes = async (req, res) => {
+  try {
+    const { dataInicio, dataFim, limite } = req.query;
+
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
+    }
+
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    const limiteNum = Math.min(Math.max(parseInt(limite) || 20, 1), 100);
+
+    const [relatorio] = await db.query(`
+      SELECT 
+        p.nome, p.cpf, p.email,
+        conv.nome as convenio,
+        COUNT(c.id) as total_consultas,
+        SUM(CASE WHEN c.status = 'concluida' THEN 1 ELSE 0 END) as compareceu,
+        SUM(CASE WHEN c.status = 'nao_compareceu' THEN 1 ELSE 0 END) as faltou,
+        SUM(CASE WHEN c.status = 'cancelada' THEN 1 ELSE 0 END) as cancelou
+      FROM pacientes p
+      LEFT JOIN convenios conv ON p.convenio_id = conv.id
+      JOIN consultas c ON p.id = c.paciente_id 
+        AND c.data_consulta BETWEEN ? AND ?
+      GROUP BY p.id, p.nome, p.cpf, p.email, conv.nome
+      HAVING COUNT(c.id) > 0
+      ORDER BY total_consultas DESC
+      LIMIT ?
+    `, [dataInicio, dataFim, limiteNum]);
+
+    const doc = new PDFDocument({ margin: 50 });
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=relatorio-pacientes-${dataInicio}-${dataFim}.pdf`);
+    
+    doc.pipe(res);
+
+    doc.fontSize(20).text('Clínica Saúde+', { align: 'center' });
+    doc.fontSize(14).text('Pacientes Mais Frequentes', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(10).text(`Período: ${formatDate(dataInicio)} a ${formatDate(dataFim)}`, { align: 'center' });
+    doc.moveDown(2);
+
+    const tableTop = doc.y;
+    
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text('#', 50, tableTop);
+    doc.text('Paciente', 70, tableTop);
+    doc.text('Convênio', 220, tableTop);
+    doc.text('Total', 320, tableTop);
+    doc.text('Comp.', 370, tableTop);
+    doc.text('Faltou', 420, tableTop);
+    doc.text('Canc.', 470, tableTop);
+    
+    doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+
+    let y = tableTop + 25;
+    doc.font('Helvetica').fontSize(8);
+
+    relatorio.forEach((pac, index) => {
+      if (y > 700) {
+        doc.addPage();
+        y = 50;
+      }
+
+      doc.text(`${index + 1}º`, 50, y);
+      doc.text(pac.nome.substring(0, 25), 70, y);
+      doc.text((pac.convenio || 'Particular').substring(0, 15), 220, y);
+      doc.text(String(pac.total_consultas || 0), 320, y);
+      doc.text(String(pac.compareceu || 0), 370, y);
+      doc.text(String(pac.faltou || 0), 420, y);
+      doc.text(String(pac.cancelou || 0), 470, y);
+      
+      y += 15;
+    });
+
+    doc.fontSize(8).text(
+      `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+      50, 750, { align: 'center' }
+    );
+
+    doc.end();
+
+  } catch (error) {
+    console.error('Erro ao gerar PDF de pacientes:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+};
+
+// ==========================================
+// GERAR PDF - CANCELAMENTOS
+// ==========================================
+exports.gerarPDFCancelamentos = async (req, res) => {
+  try {
+    const { dataInicio, dataFim } = req.query;
+
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
+    }
+
+    if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    // Taxa geral
+    const [taxaGeral] = await db.query(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'cancelada' THEN 1 ELSE 0 END) as canceladas,
+        SUM(CASE WHEN status = 'remarcada' THEN 1 ELSE 0 END) as remarcadas,
+        ROUND(SUM(CASE WHEN status = 'cancelada' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as taxa_cancelamento
+      FROM consultas
+      WHERE data_consulta BETWEEN ? AND ?
+    `, [dataInicio, dataFim]);
+
+    // Por dia da semana
+    const [porDiaSemana] = await db.query(`
+      SELECT 
+        DAYOFWEEK(data_consulta) as dia_semana,
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'cancelada' THEN 1 ELSE 0 END) as canceladas,
+        ROUND(SUM(CASE WHEN status = 'cancelada' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as taxa
+      FROM consultas
+      WHERE data_consulta BETWEEN ? AND ?
+      GROUP BY DAYOFWEEK(data_consulta)
+      ORDER BY dia_semana
+    `, [dataInicio, dataFim]);
+
+    const diasSemana = ['', 'Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+    const doc = new PDFDocument({ margin: 50 });
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=relatorio-cancelamentos-${dataInicio}-${dataFim}.pdf`);
+    
+    doc.pipe(res);
+
+    doc.fontSize(20).text('Clínica Saúde+', { align: 'center' });
+    doc.fontSize(14).text('Análise de Cancelamentos', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(10).text(`Período: ${formatDate(dataInicio)} a ${formatDate(dataFim)}`, { align: 'center' });
+    doc.moveDown(2);
+
+    // Resumo Geral
+    doc.fontSize(12).font('Helvetica-Bold').text('Resumo Geral', 50);
+    doc.moveDown();
+    doc.font('Helvetica').fontSize(10);
+    doc.text(`Total de Consultas: ${taxaGeral[0].total || 0}`);
+    doc.text(`Canceladas: ${taxaGeral[0].canceladas || 0}`);
+    doc.text(`Remarcadas: ${taxaGeral[0].remarcadas || 0}`);
+    doc.text(`Taxa de Cancelamento: ${taxaGeral[0].taxa_cancelamento || 0}%`);
+    doc.moveDown(2);
+
+    // Por dia da semana
+    doc.fontSize(12).font('Helvetica-Bold').text('Por Dia da Semana', 50);
+    doc.moveDown();
+    
+    const tableTop = doc.y;
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text('Dia', 50, tableTop);
+    doc.text('Total', 200, tableTop);
+    doc.text('Canceladas', 300, tableTop);
+    doc.text('Taxa', 420, tableTop);
+    
+    doc.moveTo(50, tableTop + 15).lineTo(500, tableTop + 15).stroke();
+
+    let y = tableTop + 25;
+    doc.font('Helvetica').fontSize(9);
+
+    for (const dia of porDiaSemana) {
+      doc.text(diasSemana[dia.dia_semana], 50, y);
+      doc.text(String(dia.total), 200, y);
+      doc.text(String(dia.canceladas), 300, y);
+      doc.text(`${dia.taxa || 0}%`, 420, y);
+      y += 15;
+    }
+
+    doc.fontSize(8).text(
+      `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+      50, 750, { align: 'center' }
+    );
+
+    doc.end();
+
+  } catch (error) {
+    console.error('Erro ao gerar PDF de cancelamentos:', error);
     return res.status(500).json({ error: 'Erro interno do servidor' });
   }
 };

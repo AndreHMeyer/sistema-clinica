@@ -73,10 +73,32 @@ export default function MedicoBloqueios() {
   };
 
   const formatarData = (dataStr) => {
-    return format(new Date(dataStr + 'T00:00:00'), "dd/MM/yyyy (EEEE)", { locale: ptBR });
+    try {
+      // Se for string no formato ISO ou objeto Date
+      let dataObj;
+      if (typeof dataStr === 'string') {
+        // Remove a parte do timezone se existir e pega só a data
+        const dataLimpa = dataStr.split('T')[0];
+        dataObj = new Date(dataLimpa + 'T12:00:00');
+      } else {
+        dataObj = new Date(dataStr);
+      }
+      
+      if (isNaN(dataObj.getTime())) {
+        return 'Data inválida';
+      }
+      
+      return format(dataObj, "dd/MM/yyyy (EEEE)", { locale: ptBR });
+    } catch (error) {
+      console.error('Erro ao formatar data:', error);
+      return 'Data inválida';
+    }
   };
 
-  const formatarHora = (hora) => hora.substring(0, 5);
+  const formatarHora = (hora) => {
+    if (!hora) return '--:--';
+    return typeof hora === 'string' ? hora.substring(0, 5) : '--:--';
+  };
 
   const getMinDate = () => format(new Date(), 'yyyy-MM-dd');
 

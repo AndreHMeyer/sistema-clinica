@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { validators } = require('../middlewares/security');
 
 // ==========================================
 // LISTAR TODOS OS CONVÊNIOS
@@ -25,6 +26,11 @@ exports.listarConvenios = async (req, res) => {
 exports.buscarConvenio = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
     const [convenios] = await db.query(
       'SELECT * FROM convenios WHERE id = ?',
@@ -63,24 +69,36 @@ exports.criarConvenio = async (req, res) => {
   try {
     const { nome, codigo } = req.body;
 
+    // Validações de entrada
     if (!nome) {
       return res.status(400).json({ error: 'Nome do convênio é obrigatório' });
     }
 
-    // Verificar se nome já existe
+    // Validar nome (mínimo 2, máximo 100 caracteres)
+    if (!validators.isValidName(nome)) {
+      return res.status(400).json({ error: 'Nome deve ter entre 2 e 100 caracteres' });
+    }
+
+    // Sanitizar e validar código (se fornecido)
+    const codigoSanitizado = codigo ? String(codigo).substring(0, 50).trim().toUpperCase() : null;
+
+    // Normalizar nome
+    const nomeSanitizado = nome.trim();
+
+    // Verificar se nome já existe (case insensitive)
     const [nomeExiste] = await db.query(
-      'SELECT id FROM convenios WHERE nome = ?',
-      [nome]
+      'SELECT id FROM convenios WHERE LOWER(nome) = LOWER(?)',
+      [nomeSanitizado]
     );
     if (nomeExiste.length > 0) {
       return res.status(400).json({ error: 'Já existe um convênio com este nome' });
     }
 
     // Verificar se código já existe
-    if (codigo) {
+    if (codigoSanitizado) {
       const [codigoExiste] = await db.query(
         'SELECT id FROM convenios WHERE codigo = ?',
-        [codigo]
+        [codigoSanitizado]
       );
       if (codigoExiste.length > 0) {
         return res.status(400).json({ error: 'Já existe um convênio com este código' });
@@ -89,8 +107,11 @@ exports.criarConvenio = async (req, res) => {
 
     const [result] = await db.query(
       'INSERT INTO convenios (nome, codigo, ativo) VALUES (?, ?, TRUE)',
-      [nome, codigo || null]
+      [nomeSanitizado, codigoSanitizado]
     );
+
+    // Log de criação
+    console.log(`[SECURITY] Convênio criado: ${result.insertId}`);
 
     return res.status(201).json({
       message: 'Convênio cadastrado com sucesso',
@@ -111,6 +132,11 @@ exports.atualizarConvenio = async (req, res) => {
     const { id } = req.params;
     const { nome, codigo, ativo } = req.body;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
     // Verificar se convênio existe
     const [convenio] = await db.query(
       'SELECT id FROM convenios WHERE id = ?',
@@ -120,25 +146,35 @@ exports.atualizarConvenio = async (req, res) => {
       return res.status(404).json({ error: 'Convênio não encontrado' });
     }
 
+    // Validar nome se fornecido
+    if (nome && !validators.isValidName(nome)) {
+      return res.status(400).json({ error: 'Nome deve ter entre 2 e 100 caracteres' });
+    }
+
+    const nomeSanitizado = nome ? nome.trim() : null;
+    const codigoSanitizado = codigo !== undefined 
+      ? (codigo ? String(codigo).substring(0, 50).trim().toUpperCase() : null)
+      : undefined;
+
     // Verificar se nome já existe em outro convênio
-    if (nome) {
+    if (nomeSanitizado) {
       const [nomeExiste] = await db.query(
-        'SELECT id FROM convenios WHERE nome = ? AND id != ?',
-        [nome, id]
+        'SELECT id FROM convenios WHERE LOWER(nome) = LOWER(?) AND id != ?',
+        [nomeSanitizado, id]
       );
       if (nomeExiste.length > 0) {
-        return res.status(400).json({ error: 'Já existe outro convênio com este nome' });
+        return res.status(400).json({ error: 'Já existe um convênio com este nome' });
       }
     }
 
     // Verificar se código já existe em outro convênio
-    if (codigo) {
+    if (codigoSanitizado) {
       const [codigoExiste] = await db.query(
         'SELECT id FROM convenios WHERE codigo = ? AND id != ?',
-        [codigo, id]
+        [codigoSanitizado, id]
       );
       if (codigoExiste.length > 0) {
-        return res.status(400).json({ error: 'Já existe outro convênio com este código' });
+        return res.status(400).json({ error: 'Já existe um convênio com este código' });
       }
     }
 
@@ -146,13 +182,13 @@ exports.atualizarConvenio = async (req, res) => {
     let updateFields = [];
     let updateValues = [];
 
-    if (nome) {
+    if (nomeSanitizado) {
       updateFields.push('nome = ?');
-      updateValues.push(nome);
+      updateValues.push(nomeSanitizado);
     }
-    if (codigo !== undefined) {
+    if (codigoSanitizado !== undefined) {
       updateFields.push('codigo = ?');
-      updateValues.push(codigo || null);
+      updateValues.push(codigoSanitizado);
     }
     if (ativo !== undefined) {
       updateFields.push('ativo = ?');
@@ -166,6 +202,9 @@ exports.atualizarConvenio = async (req, res) => {
         updateValues
       );
     }
+
+    // Log de atualização
+    console.log(`[SECURITY] Convênio atualizado: ${id}`);
 
     return res.json({ message: 'Convênio atualizado com sucesso' });
 
@@ -181,6 +220,11 @@ exports.atualizarConvenio = async (req, res) => {
 exports.deletarConvenio = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
     // Verificar se convênio existe
     const [convenio] = await db.query(
@@ -200,6 +244,10 @@ exports.deletarConvenio = async (req, res) => {
     if (medicosComConvenio[0].total > 0) {
       // Apenas desativa
       await db.query('UPDATE convenios SET ativo = FALSE WHERE id = ?', [id]);
+      
+      // Log de desativação
+      console.log(`[SECURITY] Convênio desativado (médicos associados): ${id}`);
+      
       return res.json({ 
         message: 'Convênio desativado. Existem médicos associados a este convênio.' 
       });
@@ -207,6 +255,9 @@ exports.deletarConvenio = async (req, res) => {
 
     // Desativa o convênio (soft delete)
     await db.query('UPDATE convenios SET ativo = FALSE WHERE id = ?', [id]);
+
+    // Log de desativação
+    console.log(`[SECURITY] Convênio desativado: ${id}`);
 
     return res.json({ message: 'Convênio desativado com sucesso' });
 

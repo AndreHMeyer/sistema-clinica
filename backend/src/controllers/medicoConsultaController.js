@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { validators } = require('../middlewares/security');
 
 // ==========================================
 // LISTAR CONSULTAS DO MÉDICO
@@ -7,6 +8,25 @@ exports.getConsultas = async (req, res) => {
   try {
     const medicoId = req.userId;
     const { data, status, data_inicio, data_fim } = req.query;
+
+    // Validar parâmetros de data
+    if (data && !validators.isValidDate(data)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    if (data_inicio && !validators.isValidDate(data_inicio)) {
+      return res.status(400).json({ error: 'Formato de data inicial inválido' });
+    }
+
+    if (data_fim && !validators.isValidDate(data_fim)) {
+      return res.status(400).json({ error: 'Formato de data final inválido' });
+    }
+
+    // Validar status se fornecido
+    const statusValidos = ['agendada', 'remarcada', 'realizada', 'cancelada', 'falta'];
+    if (status && !statusValidos.includes(status)) {
+      return res.status(400).json({ error: 'Status inválido' });
+    }
 
     let query = `
       SELECT c.*, p.nome as paciente_nome, p.cpf as paciente_cpf, p.telefone as paciente_telefone,
@@ -56,6 +76,11 @@ exports.getConsultaById = async (req, res) => {
     const medicoId = req.userId;
     const { id } = req.params;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
     const [consultas] = await db.query(
       `SELECT c.*, p.nome as paciente_nome, p.cpf as paciente_cpf, 
               p.telefone as paciente_telefone, p.email as paciente_email,
@@ -88,6 +113,11 @@ exports.registrarObservacoes = async (req, res) => {
     const { id } = req.params;
     const { observacoes } = req.body;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
     // Verificar se a consulta pertence ao médico
     const [consultas] = await db.query(
       'SELECT * FROM consultas WHERE id = ? AND medico_id = ?',
@@ -110,10 +140,15 @@ exports.registrarObservacoes = async (req, res) => {
       return res.status(400).json({ error: 'Só é possível registrar observações para consultas de hoje ou passadas' });
     }
 
+    // Sanitizar observações (máximo 2000 caracteres)
+    const observacoesSanitizadas = observacoes 
+      ? String(observacoes).substring(0, 2000).trim() 
+      : null;
+
     // Atualizar observações e status para realizada
     await db.query(
       `UPDATE consultas SET observacoes_medico = ?, status = 'realizada' WHERE id = ?`,
-      [observacoes, id]
+      [observacoesSanitizadas, id]
     );
 
     // Resetar faltas consecutivas do paciente
@@ -148,6 +183,11 @@ exports.marcarRealizada = async (req, res) => {
   try {
     const medicoId = req.userId;
     const { id } = req.params;
+
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
     // Verificar se a consulta pertence ao médico
     const [consultas] = await db.query(
@@ -193,6 +233,11 @@ exports.marcarFalta = async (req, res) => {
     const medicoId = req.userId;
     const { id } = req.params;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
     // Verificar se a consulta pertence ao médico
     const [consultas] = await db.query(
       'SELECT * FROM consultas WHERE id = ? AND medico_id = ?',
@@ -234,6 +279,9 @@ exports.marcarFalta = async (req, res) => {
         [consulta.paciente_id]
       );
       pacienteBloqueado = true;
+
+      // Log de bloqueio automático
+      console.log(`[SECURITY] Paciente bloqueado automaticamente por 3 faltas: ${consulta.paciente_id}`);
     }
 
     return res.json({ 
@@ -257,6 +305,11 @@ exports.cancelarConsulta = async (req, res) => {
     const { id } = req.params;
     const { motivo } = req.body;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
     // Verificar se a consulta pertence ao médico
     const [consultas] = await db.query(
       'SELECT * FROM consultas WHERE id = ? AND medico_id = ?',
@@ -273,11 +326,19 @@ exports.cancelarConsulta = async (req, res) => {
       return res.status(400).json({ error: 'Esta consulta não pode ser cancelada' });
     }
 
+    // Sanitizar motivo (máximo 500 caracteres)
+    const motivoSanitizado = motivo 
+      ? String(motivo).substring(0, 500).trim() 
+      : 'Cancelado pelo médico';
+
     // Cancelar consulta
     await db.query(
       `UPDATE consultas SET status = 'cancelada', motivo_cancelamento = ? WHERE id = ?`,
-      [motivo || 'Cancelado pelo médico', id]
+      [motivoSanitizado, id]
     );
+
+    // Log de cancelamento
+    console.log(`[SECURITY] Consulta cancelada pelo médico: ${id}`);
 
     return res.json({ message: 'Consulta cancelada com sucesso' });
 

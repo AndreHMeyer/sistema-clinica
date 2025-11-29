@@ -2,11 +2,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const config = require('../config/config');
+const { validators } = require('../middlewares/security');
 
 // Gerar token JWT
 const generateToken = (id, type) => {
   return jwt.sign({ id, type }, config.jwt.secret, {
-    expiresIn: config.jwt.expiresIn
+    expiresIn: config.jwt.expiresIn,
+    algorithm: 'HS256'
   });
 };
 
@@ -21,33 +23,43 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
     }
 
-    const [admins] = await db.query(
-      'SELECT * FROM administradores WHERE email = ? AND ativo = TRUE',
-      [email]
-    );
-
-    if (admins.length === 0) {
-      return res.status(401).json({ error: 'E-mail ou senha incorretos' });
+    if (!validators.isValidEmail(email)) {
+      return res.status(400).json({ error: 'Formato de e-mail inválido' });
     }
 
-    const admin = admins[0];
+    const normalizedEmail = email.toLowerCase().trim();
 
-    const senhaValida = await bcrypt.compare(senha, admin.senha);
-    if (!senhaValida) {
+    const [admins] = await db.query(
+      'SELECT * FROM administradores WHERE LOWER(email) = ? AND ativo = TRUE',
+      [normalizedEmail]
+    );
+
+    // Timing attack prevention - sempre executa bcrypt.compare
+    const admin = admins[0];
+    const dummyHash = '$2a$12$dummy.hash.for.timing.attack.prevention.here';
+    const senhaHash = admin ? admin.senha : dummyHash;
+    
+    const senhaValida = await bcrypt.compare(senha, senhaHash);
+
+    if (admins.length === 0 || !senhaValida) {
+      console.warn(`[AUTH] Admin login failed - Email: ${normalizedEmail.substring(0, 3)}*** - IP: ${req.ip}`);
       return res.status(401).json({ error: 'E-mail ou senha incorretos' });
     }
 
     const token = generateToken(admin.id, 'admin');
-    delete admin.senha;
+    
+    console.log(`[AUTH] Admin login successful - ID: ${admin.id} - IP: ${req.ip}`);
+
+    const { senha: _, ...adminData } = admin;
 
     return res.json({
       message: 'Login realizado com sucesso',
-      admin,
+      admin: adminData,
       token
     });
 
   } catch (error) {
-    console.error('Erro no login:', error);
+    console.error('Erro no login admin:', error);
     return res.status(500).json({ error: 'Erro interno do servidor' });
   }
 };
@@ -57,13 +69,17 @@ exports.login = async (req, res) => {
 // ==========================================
 exports.getProfile = async (req, res) => {
   try {
+    if (!validators.isValidId(req.userId)) {
+      return res.status(400).json({ error: 'ID de usuário inválido' });
+    }
+
     const [admins] = await db.query(
       'SELECT id, nome, email FROM administradores WHERE id = ? AND ativo = TRUE',
       [req.userId]
     );
 
     if (admins.length === 0) {
-      return res.status(404).json({ error: 'Administrador não encontrado' });
+      return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
     return res.json(admins[0]);

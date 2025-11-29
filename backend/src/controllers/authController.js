@@ -2,39 +2,18 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const config = require('../config/config');
+const { validators } = require('../middlewares/security');
 
-// Gerar token JWT
+// Gerar token JWT com algoritmo específico
 const generateToken = (id, type) => {
-  return jwt.sign({ id, type }, config.jwt.secret, {
-    expiresIn: config.jwt.expiresIn
-  });
-};
-
-// Validar CPF
-const validarCPF = (cpf) => {
-  cpf = cpf.replace(/[^\d]/g, '');
-  
-  if (cpf.length !== 11) return false;
-  
-  if (/^(\d)\1{10}$/.test(cpf)) return false;
-  
-  let soma = 0;
-  for (let i = 0; i < 9; i++) {
-    soma += parseInt(cpf.charAt(i)) * (10 - i);
-  }
-  let resto = (soma * 10) % 11;
-  if (resto === 10 || resto === 11) resto = 0;
-  if (resto !== parseInt(cpf.charAt(9))) return false;
-  
-  soma = 0;
-  for (let i = 0; i < 10; i++) {
-    soma += parseInt(cpf.charAt(i)) * (11 - i);
-  }
-  resto = (soma * 10) % 11;
-  if (resto === 10 || resto === 11) resto = 0;
-  if (resto !== parseInt(cpf.charAt(10))) return false;
-  
-  return true;
+  return jwt.sign(
+    { id, type }, 
+    config.jwt.secret, 
+    {
+      expiresIn: config.jwt.expiresIn,
+      algorithm: 'HS256'
+    }
+  );
 };
 
 // Formatar CPF
@@ -50,29 +29,36 @@ exports.register = async (req, res) => {
   try {
     const { cpf, nome, email, senha, telefone, convenio_id } = req.body;
 
-    // Validações
+    // Validações usando validators seguros
     if (!cpf || !nome || !email || !senha || !telefone) {
       return res.status(400).json({ error: 'Todos os campos obrigatórios devem ser preenchidos' });
     }
 
     // Validar CPF
-    if (!validarCPF(cpf)) {
+    if (!validators.isValidCPF(cpf)) {
       return res.status(400).json({ error: 'CPF inválido' });
     }
 
-    // Validar senha (8 a 20 caracteres alfanuméricos)
-    if (senha.length < 8 || senha.length > 20) {
-      return res.status(400).json({ error: 'A senha deve ter entre 8 e 20 caracteres' });
-    }
-
-    if (!/^[a-zA-Z0-9]+$/.test(senha)) {
-      return res.status(400).json({ error: 'A senha deve conter apenas letras e números' });
+    // Validar nome
+    if (!validators.isValidName(nome)) {
+      return res.status(400).json({ error: 'Nome inválido. Use apenas letras e espaços (2-150 caracteres)' });
     }
 
     // Validar email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!validators.isValidEmail(email)) {
       return res.status(400).json({ error: 'E-mail inválido' });
+    }
+
+    // Validar senha forte
+    if (!validators.isStrongPassword(senha)) {
+      return res.status(400).json({
+        error: 'A senha deve conter entre 8 e 20 caracteres, incluindo letra maiúscula, minúscula, número e símbolo'
+      });
+    }
+
+    // Validar telefone
+    if (!validators.isValidPhone(telefone)) {
+      return res.status(400).json({ error: 'Telefone inválido' });
     }
 
     const cpfFormatado = formatarCPF(cpf);
@@ -84,30 +70,33 @@ exports.register = async (req, res) => {
     }
 
     // Verificar se email já existe
-    const [emailExiste] = await db.query('SELECT id FROM pacientes WHERE email = ?', [email]);
+    const [emailExiste] = await db.query('SELECT id FROM pacientes WHERE email = ?', [email.toLowerCase()]);
     if (emailExiste.length > 0) {
       return res.status(400).json({ error: 'E-mail já cadastrado' });
     }
 
     // Verificar se convênio existe (se informado)
     if (convenio_id) {
+      if (!validators.isValidId(convenio_id)) {
+        return res.status(400).json({ error: 'ID de convênio inválido' });
+      }
       const [convenio] = await db.query('SELECT id FROM convenios WHERE id = ? AND ativo = TRUE', [convenio_id]);
       if (convenio.length === 0) {
         return res.status(400).json({ error: 'Convênio não encontrado' });
       }
     }
 
-    // Hash da senha
-    const senhaHash = await bcrypt.hash(senha, 10);
+    // Hash da senha com salt rounds seguros
+    const senhaHash = await bcrypt.hash(senha, config.bcrypt.saltRounds);
 
-    // Inserir paciente
+    // Inserir paciente (email em lowercase para consistência)
     const [result] = await db.query(
       `INSERT INTO pacientes (cpf, nome, email, senha, telefone, convenio_id) 
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [cpfFormatado, nome, email, senhaHash, telefone, convenio_id || null]
+      [cpfFormatado, nome.trim(), email.toLowerCase(), senhaHash, telefone, convenio_id || null]
     );
 
-    // Buscar paciente criado
+    // Buscar paciente criado (sem expor dados sensíveis)
     const [paciente] = await db.query(
       `SELECT p.id, p.cpf, p.nome, p.email, p.telefone, p.convenio_id, c.nome as convenio_nome
        FROM pacientes p
@@ -117,6 +106,9 @@ exports.register = async (req, res) => {
     );
 
     const token = generateToken(result.insertId, 'paciente');
+
+    // Log de registro bem-sucedido
+    console.log(`[AUTH] Novo paciente registrado - ID: ${result.insertId} - IP: ${req.ip}`);
 
     return res.status(201).json({
       message: 'Paciente cadastrado com sucesso',
@@ -141,16 +133,24 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
     }
 
-    // Buscar paciente
+    // Validar formato do email
+    if (!validators.isValidEmail(email)) {
+      return res.status(400).json({ error: 'E-mail inválido' });
+    }
+
+    // Buscar paciente (email lowercase para consistência)
     const [pacientes] = await db.query(
       `SELECT p.*, c.nome as convenio_nome 
        FROM pacientes p
        LEFT JOIN convenios c ON p.convenio_id = c.id
-       WHERE p.email = ? AND p.ativo = TRUE`,
+       WHERE LOWER(p.email) = LOWER(?) AND p.ativo = TRUE`,
       [email]
     );
 
+    // Mensagem genérica para não revelar se email existe
     if (pacientes.length === 0) {
+      // Simular tempo de verificação para prevenir timing attacks
+      await bcrypt.compare('dummy', '$2a$12$dummy.hash.for.timing.attack.prevention');
       return res.status(401).json({ error: 'E-mail ou senha incorretos' });
     }
 
@@ -159,11 +159,13 @@ exports.login = async (req, res) => {
     // Verificar senha
     const senhaValida = await bcrypt.compare(senha, paciente.senha);
     if (!senhaValida) {
+      console.warn(`[AUTH] Tentativa de login falhou - Email: ${email.substring(0, 3)}*** - IP: ${req.ip}`);
       return res.status(401).json({ error: 'E-mail ou senha incorretos' });
     }
 
     // Verificar se paciente está bloqueado
     if (paciente.bloqueado) {
+      console.warn(`[AUTH] Login bloqueado - Paciente ID: ${paciente.id} - IP: ${req.ip}`);
       return res.status(403).json({ 
         error: 'Sua conta está bloqueada devido a faltas consecutivas. Entre em contato com a administração.' 
       });
@@ -171,8 +173,11 @@ exports.login = async (req, res) => {
 
     const token = generateToken(paciente.id, 'paciente');
 
-    // Remover senha do retorno
+    // Remover dados sensíveis do retorno
     delete paciente.senha;
+
+    // Log de login bem-sucedido
+    console.log(`[AUTH] Login bem-sucedido - Paciente ID: ${paciente.id} - IP: ${req.ip}`);
 
     return res.json({
       message: 'Login realizado com sucesso',
@@ -191,6 +196,11 @@ exports.login = async (req, res) => {
 // ==========================================
 exports.getProfile = async (req, res) => {
   try {
+    // Validar ID do usuário
+    if (!validators.isValidId(req.userId)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
     const [pacientes] = await db.query(
       `SELECT p.id, p.cpf, p.nome, p.email, p.telefone, p.convenio_id, 
               p.bloqueado, p.faltas_consecutivas, c.nome as convenio_nome
@@ -219,8 +229,26 @@ exports.updateProfile = async (req, res) => {
   try {
     const { nome, telefone, convenio_id } = req.body;
 
+    // Validar ID do usuário
+    if (!validators.isValidId(req.userId)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
+    // Validar nome se fornecido
+    if (nome && !validators.isValidName(nome)) {
+      return res.status(400).json({ error: 'Nome inválido' });
+    }
+
+    // Validar telefone se fornecido
+    if (telefone && !validators.isValidPhone(telefone)) {
+      return res.status(400).json({ error: 'Telefone inválido' });
+    }
+
     // Verificar se convênio existe (se informado)
     if (convenio_id) {
+      if (!validators.isValidId(convenio_id)) {
+        return res.status(400).json({ error: 'ID de convênio inválido' });
+      }
       const [convenio] = await db.query('SELECT id FROM convenios WHERE id = ? AND ativo = TRUE', [convenio_id]);
       if (convenio.length === 0) {
         return res.status(400).json({ error: 'Convênio não encontrado' });
@@ -229,7 +257,7 @@ exports.updateProfile = async (req, res) => {
 
     await db.query(
       `UPDATE pacientes SET nome = ?, telefone = ?, convenio_id = ? WHERE id = ?`,
-      [nome, telefone, convenio_id || null, req.userId]
+      [nome?.trim(), telefone, convenio_id || null, req.userId]
     );
 
     const [paciente] = await db.query(

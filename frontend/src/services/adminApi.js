@@ -25,7 +25,10 @@ adminApi.interceptors.request.use(
 adminApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Não redireciona se for erro de login (credenciais inválidas)
+    const isLoginRequest = error.config?.url?.includes('/login');
+    
+    if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('adminToken');
       localStorage.removeItem('admin');
       window.location.href = '/admin/login';

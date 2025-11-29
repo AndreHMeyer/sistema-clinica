@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { validators } = require('../middlewares/security');
 
 // ==========================================
 // LISTAR HORÁRIOS DO MÉDICO
@@ -39,18 +40,35 @@ exports.addHorario = async (req, res) => {
     const medicoId = req.userId;
     const { dia_semana, hora_inicio, hora_fim, duracao_consulta } = req.body;
 
-    // Validações
+    // Validações de entrada
     if (dia_semana === undefined || !hora_inicio || !hora_fim) {
       return res.status(400).json({ error: 'Dia da semana, hora início e hora fim são obrigatórios' });
     }
 
-    if (dia_semana < 0 || dia_semana > 6) {
+    // Validar dia da semana
+    const diaSemanaNum = parseInt(dia_semana, 10);
+    if (isNaN(diaSemanaNum) || diaSemanaNum < 0 || diaSemanaNum > 6) {
       return res.status(400).json({ error: 'Dia da semana inválido' });
+    }
+
+    // Validar formato das horas
+    if (!validators.isValidTime(hora_inicio)) {
+      return res.status(400).json({ error: 'Formato de hora início inválido' });
+    }
+
+    if (!validators.isValidTime(hora_fim)) {
+      return res.status(400).json({ error: 'Formato de hora fim inválido' });
     }
 
     // Verificar se hora fim é maior que hora início
     if (hora_fim <= hora_inicio) {
       return res.status(400).json({ error: 'Hora fim deve ser maior que hora início' });
+    }
+
+    // Validar duração da consulta
+    const duracaoNum = duracao_consulta ? parseInt(duracao_consulta, 10) : 30;
+    if (isNaN(duracaoNum) || duracaoNum < 10 || duracaoNum > 120) {
+      return res.status(400).json({ error: 'Duração da consulta deve ser entre 10 e 120 minutos' });
     }
 
     // Verificar conflito de horários no mesmo dia
@@ -59,7 +77,7 @@ exports.addHorario = async (req, res) => {
        WHERE medico_id = ? AND dia_semana = ? AND ativo = TRUE
        AND ((hora_inicio <= ? AND hora_fim > ?) OR (hora_inicio < ? AND hora_fim >= ?) 
             OR (hora_inicio >= ? AND hora_fim <= ?))`,
-      [medicoId, dia_semana, hora_inicio, hora_inicio, hora_fim, hora_fim, hora_inicio, hora_fim]
+      [medicoId, diaSemanaNum, hora_inicio, hora_inicio, hora_fim, hora_fim, hora_inicio, hora_fim]
     );
 
     if (conflitos.length > 0) {
@@ -70,7 +88,7 @@ exports.addHorario = async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO horarios_disponiveis (medico_id, dia_semana, hora_inicio, hora_fim, duracao_consulta)
        VALUES (?, ?, ?, ?, ?)`,
-      [medicoId, dia_semana, hora_inicio, hora_fim, duracao_consulta || 30]
+      [medicoId, diaSemanaNum, hora_inicio, hora_fim, duracaoNum]
     );
 
     const [novoHorario] = await db.query(
@@ -98,6 +116,26 @@ exports.updateHorario = async (req, res) => {
     const { id } = req.params;
     const { hora_inicio, hora_fim, duracao_consulta, ativo } = req.body;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
+    // Validar formatos se fornecidos
+    if (hora_inicio && !validators.isValidTime(hora_inicio)) {
+      return res.status(400).json({ error: 'Formato de hora início inválido' });
+    }
+
+    if (hora_fim && !validators.isValidTime(hora_fim)) {
+      return res.status(400).json({ error: 'Formato de hora fim inválido' });
+    }
+
+    // Validar duração se fornecida
+    const duracaoNum = duracao_consulta ? parseInt(duracao_consulta, 10) : 30;
+    if (duracao_consulta && (isNaN(duracaoNum) || duracaoNum < 10 || duracaoNum > 120)) {
+      return res.status(400).json({ error: 'Duração da consulta deve ser entre 10 e 120 minutos' });
+    }
+
     // Verificar se o horário pertence ao médico
     const [horarioExiste] = await db.query(
       'SELECT * FROM horarios_disponiveis WHERE id = ? AND medico_id = ?',
@@ -113,7 +151,7 @@ exports.updateHorario = async (req, res) => {
       `UPDATE horarios_disponiveis 
        SET hora_inicio = ?, hora_fim = ?, duracao_consulta = ?, ativo = ?
        WHERE id = ? AND medico_id = ?`,
-      [hora_inicio, hora_fim, duracao_consulta || 30, ativo !== undefined ? ativo : true, id, medicoId]
+      [hora_inicio, hora_fim, duracaoNum, ativo !== undefined ? ativo : true, id, medicoId]
     );
 
     const [horarioAtualizado] = await db.query(
@@ -139,6 +177,11 @@ exports.deleteHorario = async (req, res) => {
   try {
     const medicoId = req.userId;
     const { id } = req.params;
+
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
     // Verificar se o horário pertence ao médico
     const [horarioExiste] = await db.query(
@@ -171,6 +214,15 @@ exports.getBloqueios = async (req, res) => {
   try {
     const medicoId = req.userId;
     const { data_inicio, data_fim } = req.query;
+
+    // Validar datas se fornecidas
+    if (data_inicio && !validators.isValidDate(data_inicio)) {
+      return res.status(400).json({ error: 'Formato de data inicial inválido' });
+    }
+
+    if (data_fim && !validators.isValidDate(data_fim)) {
+      return res.status(400).json({ error: 'Formato de data final inválido' });
+    }
 
     let query = `
       SELECT id, data, hora_inicio, hora_fim, motivo, created_at
@@ -207,9 +259,23 @@ exports.addBloqueio = async (req, res) => {
     const medicoId = req.userId;
     const { data, hora_inicio, hora_fim, motivo } = req.body;
 
-    // Validações
+    // Validações de entrada
     if (!data || !hora_inicio || !hora_fim) {
       return res.status(400).json({ error: 'Data, hora início e hora fim são obrigatórios' });
+    }
+
+    // Validar formato da data
+    if (!validators.isValidDate(data)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    // Validar formato das horas
+    if (!validators.isValidTime(hora_inicio)) {
+      return res.status(400).json({ error: 'Formato de hora início inválido' });
+    }
+
+    if (!validators.isValidTime(hora_fim)) {
+      return res.status(400).json({ error: 'Formato de hora fim inválido' });
     }
 
     // Verificar se a data é futura
@@ -239,11 +305,16 @@ exports.addBloqueio = async (req, res) => {
       });
     }
 
+    // Sanitizar motivo (máximo 500 caracteres)
+    const motivoSanitizado = motivo 
+      ? String(motivo).substring(0, 500).trim() 
+      : null;
+
     // Inserir bloqueio
     const [result] = await db.query(
       `INSERT INTO bloqueios_horario (medico_id, data, hora_inicio, hora_fim, motivo)
        VALUES (?, ?, ?, ?, ?)`,
-      [medicoId, data, hora_inicio, hora_fim, motivo || null]
+      [medicoId, data, hora_inicio, hora_fim, motivoSanitizado]
     );
 
     const [novoBloqueio] = await db.query(
@@ -269,6 +340,11 @@ exports.deleteBloqueio = async (req, res) => {
   try {
     const medicoId = req.userId;
     const { id } = req.params;
+
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
     // Verificar se o bloqueio pertence ao médico
     const [bloqueioExiste] = await db.query(

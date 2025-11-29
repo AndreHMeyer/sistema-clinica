@@ -6,11 +6,12 @@ const adminConvenioController = require('../controllers/adminConvenioController'
 const adminRelatorioController = require('../controllers/adminRelatorioController');
 const adminPacienteController = require('../controllers/adminPacienteController');
 const { authMiddleware, isAdmin } = require('../middlewares/auth');
+const { loginLimiter } = require('../middlewares/security');
 
 // ==========================================
-// ROTAS PÚBLICAS (LOGIN)
+// ROTAS PÚBLICAS (LOGIN com rate limiting)
 // ==========================================
-router.post('/login', adminAuthController.login);
+router.post('/login', loginLimiter, adminAuthController.login);
 
 // ==========================================
 // MIDDLEWARE DE AUTENTICAÇÃO ADMIN
@@ -59,6 +60,9 @@ router.get('/relatorios/cancelamentos', adminRelatorioController.relatorioCancel
 // Rotas de PDF
 router.get('/relatorios/pdf/consultas', adminRelatorioController.gerarPDFConsultas);
 router.get('/relatorios/pdf/medicos', adminRelatorioController.gerarPDFMedicos);
+router.get('/relatorios/pdf/especialidades', adminRelatorioController.gerarPDFEspecialidades);
+router.get('/relatorios/pdf/pacientes', adminRelatorioController.gerarPDFPacientes);
+router.get('/relatorios/pdf/cancelamentos', adminRelatorioController.gerarPDFCancelamentos);
 
 // ==========================================
 // ROTAS DE GESTÃO DE PACIENTES

@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
 const db = require('../config/database');
+const config = require('../config/config');
+const { validators } = require('../middlewares/security');
 
 // ==========================================
 // LISTAR TODOS OS MÉDICOS
@@ -39,6 +41,11 @@ exports.listarMedicos = async (req, res) => {
 exports.buscarMedico = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
     const [medicos] = await db.query(`
       SELECT m.id, m.nome, m.crm, m.email, m.telefone, m.ativo,
@@ -82,17 +89,52 @@ exports.criarMedico = async (req, res) => {
   try {
     const { nome, crm, email, telefone, senha, especialidade_id, convenio_ids } = req.body;
 
-    // Validações
+    // Validações de entrada
     if (!nome || !crm || !email || !senha || !especialidade_id) {
       return res.status(400).json({ 
         error: 'Nome, CRM, email, senha e especialidade são obrigatórios' 
       });
     }
 
+    // Validar formato do email
+    if (!validators.isValidEmail(email)) {
+      return res.status(400).json({ error: 'Formato de e-mail inválido' });
+    }
+
+    // Validar formato do CRM
+    if (!validators.isValidCRM(crm)) {
+      return res.status(400).json({ error: 'Formato de CRM inválido' });
+    }
+
+    // Validar nome
+    if (!validators.isValidName(nome)) {
+      return res.status(400).json({ error: 'Nome deve ter entre 2 e 100 caracteres' });
+    }
+
+    // Validar força da senha
+    if (!validators.isStrongPassword(senha)) {
+      return res.status(400).json({ 
+        error: 'Senha deve ter mínimo 8 caracteres, incluindo maiúscula, minúscula e número' 
+      });
+    }
+
+    // Validar telefone se fornecido
+    if (telefone && !validators.isValidPhone(telefone)) {
+      return res.status(400).json({ error: 'Formato de telefone inválido' });
+    }
+
+    // Validar especialidade_id
+    if (!validators.isValidId(especialidade_id)) {
+      return res.status(400).json({ error: 'ID de especialidade inválido' });
+    }
+
+    // Normalizar email
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Verificar se email já existe
     const [emailExiste] = await connection.query(
-      'SELECT id FROM medicos WHERE email = ?',
-      [email]
+      'SELECT id FROM medicos WHERE LOWER(email) = ?',
+      [normalizedEmail]
     );
     if (emailExiste.length > 0) {
       return res.status(400).json({ error: 'E-mail já cadastrado' });
@@ -101,7 +143,7 @@ exports.criarMedico = async (req, res) => {
     // Verificar se CRM já existe
     const [crmExiste] = await connection.query(
       'SELECT id FROM medicos WHERE crm = ?',
-      [crm]
+      [crm.toUpperCase().trim()]
     );
     if (crmExiste.length > 0) {
       return res.status(400).json({ error: 'CRM já cadastrado' });
@@ -109,28 +151,33 @@ exports.criarMedico = async (req, res) => {
 
     await connection.beginTransaction();
 
-    // Hash da senha
-    const senhaHash = await bcrypt.hash(senha, 10);
+    // Hash da senha com salt rounds da configuração
+    const senhaHash = await bcrypt.hash(senha, config.bcrypt.saltRounds);
 
     // Inserir médico
     const [result] = await connection.query(`
       INSERT INTO medicos (nome, crm, email, telefone, senha, especialidade_id, ativo)
       VALUES (?, ?, ?, ?, ?, ?, TRUE)
-    `, [nome, crm, email, telefone || null, senhaHash, especialidade_id]);
+    `, [nome.trim(), crm.toUpperCase().trim(), normalizedEmail, telefone || null, senhaHash, especialidade_id]);
 
     const medicoId = result.insertId;
 
-    // Inserir convênios
-    if (convenio_ids && convenio_ids.length > 0) {
+    // Inserir convênios (com validação)
+    if (convenio_ids && Array.isArray(convenio_ids) && convenio_ids.length > 0) {
       for (const convenioId of convenio_ids) {
-        await connection.query(
-          'INSERT INTO medico_convenios (medico_id, convenio_id) VALUES (?, ?)',
-          [medicoId, convenioId]
-        );
+        if (validators.isValidId(convenioId)) {
+          await connection.query(
+            'INSERT INTO medico_convenios (medico_id, convenio_id) VALUES (?, ?)',
+            [medicoId, convenioId]
+          );
+        }
       }
     }
 
     await connection.commit();
+
+    // Log de criação
+    console.log(`[SECURITY] Médico criado: ${medicoId}`);
 
     return res.status(201).json({
       message: 'Médico cadastrado com sucesso',
@@ -156,6 +203,11 @@ exports.atualizarMedico = async (req, res) => {
     const { id } = req.params;
     const { nome, crm, email, telefone, senha, especialidade_id, convenio_ids, ativo } = req.body;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
     // Verificar se médico existe
     const [medico] = await connection.query(
       'SELECT id FROM medicos WHERE id = ?',
@@ -165,11 +217,40 @@ exports.atualizarMedico = async (req, res) => {
       return res.status(404).json({ error: 'Médico não encontrado' });
     }
 
+    // Validações de entrada
+    if (email && !validators.isValidEmail(email)) {
+      return res.status(400).json({ error: 'Formato de e-mail inválido' });
+    }
+
+    if (crm && !validators.isValidCRM(crm)) {
+      return res.status(400).json({ error: 'Formato de CRM inválido' });
+    }
+
+    if (nome && !validators.isValidName(nome)) {
+      return res.status(400).json({ error: 'Nome deve ter entre 2 e 100 caracteres' });
+    }
+
+    if (telefone && !validators.isValidPhone(telefone)) {
+      return res.status(400).json({ error: 'Formato de telefone inválido' });
+    }
+
+    if (especialidade_id && !validators.isValidId(especialidade_id)) {
+      return res.status(400).json({ error: 'ID de especialidade inválido' });
+    }
+
+    // Validar força da senha se fornecida
+    if (senha && !validators.isStrongPassword(senha)) {
+      return res.status(400).json({ 
+        error: 'Senha deve ter mínimo 8 caracteres, incluindo maiúscula, minúscula e número' 
+      });
+    }
+
     // Verificar se email já existe em outro médico
     if (email) {
+      const normalizedEmail = email.toLowerCase().trim();
       const [emailExiste] = await connection.query(
-        'SELECT id FROM medicos WHERE email = ? AND id != ?',
-        [email, id]
+        'SELECT id FROM medicos WHERE LOWER(email) = ? AND id != ?',
+        [normalizedEmail, id]
       );
       if (emailExiste.length > 0) {
         return res.status(400).json({ error: 'E-mail já cadastrado para outro médico' });
@@ -180,7 +261,7 @@ exports.atualizarMedico = async (req, res) => {
     if (crm) {
       const [crmExiste] = await connection.query(
         'SELECT id FROM medicos WHERE crm = ? AND id != ?',
-        [crm, id]
+        [crm.toUpperCase().trim(), id]
       );
       if (crmExiste.length > 0) {
         return res.status(400).json({ error: 'CRM já cadastrado para outro médico' });
@@ -195,15 +276,15 @@ exports.atualizarMedico = async (req, res) => {
 
     if (nome) {
       updateFields.push('nome = ?');
-      updateValues.push(nome);
+      updateValues.push(nome.trim());
     }
     if (crm) {
       updateFields.push('crm = ?');
-      updateValues.push(crm);
+      updateValues.push(crm.toUpperCase().trim());
     }
     if (email) {
       updateFields.push('email = ?');
-      updateValues.push(email);
+      updateValues.push(email.toLowerCase().trim());
     }
     if (telefone !== undefined) {
       updateFields.push('telefone = ?');
@@ -218,7 +299,8 @@ exports.atualizarMedico = async (req, res) => {
       updateValues.push(ativo);
     }
     if (senha) {
-      const senhaHash = await bcrypt.hash(senha, 10);
+      // Hash com salt rounds da configuração
+      const senhaHash = await bcrypt.hash(senha, config.bcrypt.saltRounds);
       updateFields.push('senha = ?');
       updateValues.push(senhaHash);
     }
@@ -239,18 +321,23 @@ exports.atualizarMedico = async (req, res) => {
         [id]
       );
 
-      // Inserir novos convênios
-      if (convenio_ids && convenio_ids.length > 0) {
+      // Inserir novos convênios (com validação)
+      if (convenio_ids && Array.isArray(convenio_ids) && convenio_ids.length > 0) {
         for (const convenioId of convenio_ids) {
-          await connection.query(
-            'INSERT INTO medico_convenios (medico_id, convenio_id) VALUES (?, ?)',
-            [id, convenioId]
-          );
+          if (validators.isValidId(convenioId)) {
+            await connection.query(
+              'INSERT INTO medico_convenios (medico_id, convenio_id) VALUES (?, ?)',
+              [id, convenioId]
+            );
+          }
         }
       }
     }
 
     await connection.commit();
+
+    // Log de atualização
+    console.log(`[SECURITY] Médico atualizado: ${id}`);
 
     return res.json({ message: 'Médico atualizado com sucesso' });
 
@@ -269,6 +356,11 @@ exports.atualizarMedico = async (req, res) => {
 exports.deletarMedico = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
     // Verificar se médico existe
     const [medico] = await db.query(
@@ -290,6 +382,10 @@ exports.deletarMedico = async (req, res) => {
     if (consultasFuturas[0].total > 0) {
       // Apenas desativa o médico
       await db.query('UPDATE medicos SET ativo = FALSE WHERE id = ?', [id]);
+      
+      // Log de desativação
+      console.log(`[SECURITY] Médico desativado (consultas pendentes): ${id}`);
+      
       return res.json({ 
         message: 'Médico desativado. Há consultas futuras pendentes que devem ser reagendadas.' 
       });
@@ -297,6 +393,9 @@ exports.deletarMedico = async (req, res) => {
 
     // Desativa o médico (soft delete)
     await db.query('UPDATE medicos SET ativo = FALSE WHERE id = ?', [id]);
+
+    // Log de desativação
+    console.log(`[SECURITY] Médico desativado: ${id}`);
 
     return res.json({ message: 'Médico desativado com sucesso' });
 
