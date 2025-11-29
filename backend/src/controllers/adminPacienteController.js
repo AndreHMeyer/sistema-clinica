@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { validators } = require('../middlewares/security');
 
 // ==========================================
 // LISTAR TODOS OS PACIENTES
@@ -21,9 +22,11 @@ exports.listarPacientes = async (req, res) => {
       query += ' AND p.bloqueado = TRUE';
     }
 
+    // Sanitizar busca (limitar tamanho e caracteres especiais)
     if (busca) {
+      const buscaSanitizada = String(busca).substring(0, 100).trim();
       query += ' AND (p.nome LIKE ? OR p.cpf LIKE ? OR p.email LIKE ?)';
-      params.push(`%${busca}%`, `%${busca}%`, `%${busca}%`);
+      params.push(`%${buscaSanitizada}%`, `%${buscaSanitizada}%`, `%${buscaSanitizada}%`);
     }
 
     query += ' ORDER BY p.bloqueado DESC, p.nome ASC';
@@ -43,6 +46,11 @@ exports.listarPacientes = async (req, res) => {
 exports.buscarPaciente = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
     const [pacientes] = await db.query(`
       SELECT p.*, c.nome as convenio_nome
@@ -98,6 +106,11 @@ exports.desbloquearPaciente = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
     // Verificar se paciente existe e está bloqueado
     const [pacientes] = await db.query(
       'SELECT id, nome, bloqueado FROM pacientes WHERE id = ?',
@@ -118,6 +131,9 @@ exports.desbloquearPaciente = async (req, res) => {
       [id]
     );
 
+    // Log de desbloqueio
+    console.log(`[SECURITY] Paciente desbloqueado: ${id}`);
+
     return res.json({ 
       message: `Paciente ${pacientes[0].nome} desbloqueado com sucesso` 
     });
@@ -134,6 +150,11 @@ exports.bloquearPaciente = async (req, res) => {
   try {
     const { id } = req.params;
     const { motivo } = req.body;
+
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
 
     // Verificar se paciente existe
     const [pacientes] = await db.query(
@@ -154,6 +175,9 @@ exports.bloquearPaciente = async (req, res) => {
       'UPDATE pacientes SET bloqueado = TRUE WHERE id = ?',
       [id]
     );
+
+    // Log de bloqueio
+    console.log(`[SECURITY] Paciente bloqueado manualmente: ${id} - Admin: ${req.userId}`);
 
     return res.json({ 
       message: `Paciente ${pacientes[0].nome} bloqueado com sucesso` 
@@ -194,6 +218,11 @@ exports.toggleAtivoPaciente = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
     const [pacientes] = await db.query(
       'SELECT id, nome, ativo FROM pacientes WHERE id = ?',
       [id]
@@ -209,6 +238,9 @@ exports.toggleAtivoPaciente = async (req, res) => {
       'UPDATE pacientes SET ativo = ? WHERE id = ?',
       [novoStatus, id]
     );
+
+    // Log de alteração
+    console.log(`[SECURITY] Paciente ${novoStatus ? 'ativado' : 'desativado'}: ${id}`);
 
     return res.json({ 
       message: `Paciente ${novoStatus ? 'ativado' : 'desativado'} com sucesso`,

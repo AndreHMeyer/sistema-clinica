@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { validators } = require('../middlewares/security');
 
 // ==========================================
 // LISTAR ESPECIALIDADES
@@ -22,6 +23,15 @@ exports.getMedicosByEspecialidade = async (req, res) => {
   try {
     const { especialidadeId } = req.params;
     const { convenioId } = req.query;
+
+    // Validar IDs
+    if (!validators.isValidId(especialidadeId)) {
+      return res.status(400).json({ error: 'ID de especialidade inválido' });
+    }
+
+    if (convenioId && !validators.isValidId(convenioId)) {
+      return res.status(400).json({ error: 'ID de convênio inválido' });
+    }
 
     let query = `
       SELECT DISTINCT m.id, m.nome, m.crm, e.nome as especialidade
@@ -58,8 +68,18 @@ exports.getHorariosDisponiveis = async (req, res) => {
     const { medicoId } = req.params;
     const { data } = req.query;
 
+    // Validar parâmetros
+    if (!validators.isValidId(medicoId)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
+
     if (!data) {
       return res.status(400).json({ error: 'Data é obrigatória' });
+    }
+
+    // Validar formato da data
+    if (!validators.isValidDate(data)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
     }
 
     // Verificar se a data é futura
@@ -195,9 +215,28 @@ exports.agendarConsulta = async (req, res) => {
     const { medico_id, data_consulta, hora_consulta, tipo_atendimento } = req.body;
     const paciente_id = req.userId;
 
-    // Validações básicas
+    // Validações de entrada
     if (!medico_id || !data_consulta || !hora_consulta) {
       return res.status(400).json({ error: 'Médico, data e hora são obrigatórios' });
+    }
+
+    // Validar IDs e formatos
+    if (!validators.isValidId(medico_id)) {
+      return res.status(400).json({ error: 'ID de médico inválido' });
+    }
+
+    if (!validators.isValidDate(data_consulta)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    if (!validators.isValidTime(hora_consulta)) {
+      return res.status(400).json({ error: 'Formato de hora inválido' });
+    }
+
+    // Validar tipo de atendimento
+    const tiposValidos = ['particular', 'convenio'];
+    if (tipo_atendimento && !tiposValidos.includes(tipo_atendimento)) {
+      return res.status(400).json({ error: 'Tipo de atendimento inválido' });
     }
 
     // Buscar dados do paciente
@@ -338,6 +377,11 @@ exports.cancelarConsulta = async (req, res) => {
     const { motivo } = req.body;
     const paciente_id = req.userId;
 
+    // Validar ID
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID de consulta inválido' });
+    }
+
     // Buscar consulta
     const [consultas] = await db.query(
       'SELECT * FROM consultas WHERE id = ? AND paciente_id = ?',
@@ -370,11 +414,19 @@ exports.cancelarConsulta = async (req, res) => {
       });
     }
 
+    // Sanitizar motivo (máximo 500 caracteres)
+    const motivoSanitizado = motivo 
+      ? String(motivo).substring(0, 500).trim() 
+      : 'Cancelado pelo paciente';
+
     // Cancelar consulta
     await db.query(
       `UPDATE consultas SET status = 'cancelada', motivo_cancelamento = ? WHERE id = ?`,
-      [motivo || 'Cancelado pelo paciente', id]
+      [motivoSanitizado, id]
     );
+
+    // Log de cancelamento
+    console.log(`[SECURITY] Consulta cancelada: ${id}`);
 
     return res.json({ message: 'Consulta cancelada com sucesso' });
 
@@ -393,8 +445,21 @@ exports.remarcarConsulta = async (req, res) => {
     const { nova_data, novo_horario } = req.body;
     const paciente_id = req.userId;
 
+    // Validações de entrada
     if (!nova_data || !novo_horario) {
       return res.status(400).json({ error: 'Nova data e horário são obrigatórios' });
+    }
+
+    if (!validators.isValidId(id)) {
+      return res.status(400).json({ error: 'ID de consulta inválido' });
+    }
+
+    if (!validators.isValidDate(nova_data)) {
+      return res.status(400).json({ error: 'Formato de data inválido' });
+    }
+
+    if (!validators.isValidTime(novo_horario)) {
+      return res.status(400).json({ error: 'Formato de hora inválido' });
     }
 
     // Buscar consulta original

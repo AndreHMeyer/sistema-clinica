@@ -15,7 +15,7 @@ export default function Perfil() {
     if (paciente) {
       setValue('nome', paciente.nome);
       setValue('telefone', paciente.telefone);
-      setValue('convenio_id', paciente.convenio_id || '');
+      setValue('convenio_id', paciente.convenio_id ? String(paciente.convenio_id) : '');
     }
   }, [paciente, setValue]);
 
@@ -42,7 +42,7 @@ export default function Perfil() {
     const result = await updateProfile({
       nome: data.nome,
       telefone: data.telefone,
-      convenio_id: data.convenio_id || null
+      convenio_id: data.convenio_id ? parseInt(data.convenio_id, 10) : null
     });
     setLoading(false);
 

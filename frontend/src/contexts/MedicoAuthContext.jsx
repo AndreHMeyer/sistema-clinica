@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import api from '../services/api';
+import medicoApi from '../services/medicoApi';
 
 const MedicoAuthContext = createContext({});
 
@@ -19,7 +19,7 @@ export function MedicoAuthProvider({ children }) {
 
   const login = async (email, senha) => {
     try {
-      const response = await api.post('/medico/auth/login', { email, senha });
+      const response = await medicoApi.post('/medico/auth/login', { email, senha });
       const { medico, token } = response.data;
 
       localStorage.setItem('medicoToken', token);
@@ -43,7 +43,7 @@ export function MedicoAuthProvider({ children }) {
 
   const updateProfile = async (dados) => {
     try {
-      const response = await api.put('/medico/auth/profile', dados);
+      const response = await medicoApi.put('/medico/auth/profile', dados);
       const { medico: medicoAtualizado } = response.data;
 
       localStorage.setItem('medico', JSON.stringify(medicoAtualizado));

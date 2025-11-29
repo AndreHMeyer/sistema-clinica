@@ -8,13 +8,32 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedPaciente = localStorage.getItem('paciente');
-    const storedToken = localStorage.getItem('token');
+    const loadStoredData = async () => {
+      const storedPaciente = localStorage.getItem('paciente');
+      const storedToken = localStorage.getItem('token');
 
-    if (storedPaciente && storedToken) {
-      setPaciente(JSON.parse(storedPaciente));
-    }
-    setLoading(false);
+      if (storedPaciente && storedToken) {
+        // Carregar dados do localStorage primeiro para resposta rápida
+        setPaciente(JSON.parse(storedPaciente));
+        
+        // Buscar dados atualizados do servidor
+        try {
+          const response = await api.get('/auth/profile');
+          localStorage.setItem('paciente', JSON.stringify(response.data));
+          setPaciente(response.data);
+        } catch (error) {
+          // Se falhar (token expirado, etc), faz logout
+          if (error.response?.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('paciente');
+            setPaciente(null);
+          }
+        }
+      }
+      setLoading(false);
+    };
+
+    loadStoredData();
   }, []);
 
   const login = async (email, senha) => {
