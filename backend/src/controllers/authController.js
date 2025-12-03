@@ -4,7 +4,6 @@ const db = require('../config/database');
 const config = require('../config/config');
 const { validators } = require('../middlewares/security');
 
-// Gerar token JWT com algoritmo específico
 const generateToken = (id, type) => {
   return jwt.sign(
     { id, type }, 
@@ -16,7 +15,6 @@ const generateToken = (id, type) => {
   );
 };
 
-// Formatar CPF
 const formatarCPF = (cpf) => {
   cpf = cpf.replace(/[^\d]/g, '');
   return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
@@ -29,34 +27,28 @@ exports.register = async (req, res) => {
   try {
     const { cpf, nome, email, senha, telefone, convenio_id } = req.body;
 
-    // Validações usando validators seguros
     if (!cpf || !nome || !email || !senha || !telefone) {
       return res.status(400).json({ error: 'Todos os campos obrigatórios devem ser preenchidos' });
     }
 
-    // Validar CPF
     if (!validators.isValidCPF(cpf)) {
       return res.status(400).json({ error: 'CPF inválido' });
     }
 
-    // Validar nome
     if (!validators.isValidName(nome)) {
       return res.status(400).json({ error: 'Nome inválido. Use apenas letras e espaços (2-150 caracteres)' });
     }
 
-    // Validar email
     if (!validators.isValidEmail(email)) {
       return res.status(400).json({ error: 'E-mail inválido' });
     }
 
-    // Validar senha forte
     if (!validators.isStrongPassword(senha)) {
       return res.status(400).json({
         error: 'A senha deve conter entre 8 e 20 caracteres, incluindo letra maiúscula, minúscula, número e símbolo'
       });
     }
 
-    // Validar telefone
     if (!validators.isValidPhone(telefone)) {
       return res.status(400).json({ error: 'Telefone inválido' });
     }
@@ -86,17 +78,14 @@ exports.register = async (req, res) => {
       }
     }
 
-    // Hash da senha com salt rounds seguros
     const senhaHash = await bcrypt.hash(senha, config.bcrypt.saltRounds);
 
-    // Inserir paciente (email em lowercase para consistência)
     const [result] = await db.query(
       `INSERT INTO pacientes (cpf, nome, email, senha, telefone, convenio_id) 
        VALUES (?, ?, ?, ?, ?, ?)`,
       [cpfFormatado, nome.trim(), email.toLowerCase(), senhaHash, telefone, convenio_id || null]
     );
 
-    // Buscar paciente criado (sem expor dados sensíveis)
     const [paciente] = await db.query(
       `SELECT p.id, p.cpf, p.nome, p.email, p.telefone, p.convenio_id, c.nome as convenio_nome
        FROM pacientes p
@@ -133,12 +122,10 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
     }
 
-    // Validar formato do email
     if (!validators.isValidEmail(email)) {
       return res.status(400).json({ error: 'E-mail inválido' });
     }
 
-    // Buscar paciente (email lowercase para consistência)
     const [pacientes] = await db.query(
       `SELECT p.*, c.nome as convenio_nome 
        FROM pacientes p
@@ -147,7 +134,6 @@ exports.login = async (req, res) => {
       [email]
     );
 
-    // Mensagem genérica para não revelar se email existe
     if (pacientes.length === 0) {
       // Simular tempo de verificação para prevenir timing attacks
       await bcrypt.compare('dummy', '$2a$12$dummy.hash.for.timing.attack.prevention');
@@ -163,7 +149,6 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'E-mail ou senha incorretos' });
     }
 
-    // Verificar se paciente está bloqueado
     if (paciente.bloqueado) {
       console.warn(`[AUTH] Login bloqueado - Paciente ID: ${paciente.id} - IP: ${req.ip}`);
       return res.status(403).json({ 
@@ -172,11 +157,8 @@ exports.login = async (req, res) => {
     }
 
     const token = generateToken(paciente.id, 'paciente');
-
-    // Remover dados sensíveis do retorno
     delete paciente.senha;
 
-    // Log de login bem-sucedido
     console.log(`[AUTH] Login bem-sucedido - Paciente ID: ${paciente.id} - IP: ${req.ip}`);
 
     return res.json({

@@ -4,7 +4,6 @@ const db = require('../config/database');
 const config = require('../config/config');
 const { validators } = require('../middlewares/security');
 
-// Gerar token JWT
 const generateToken = (id, type) => {
   return jwt.sign({ id, type }, config.jwt.secret, {
     expiresIn: config.jwt.expiresIn,
@@ -34,7 +33,7 @@ exports.login = async (req, res) => {
       [normalizedEmail]
     );
 
-    // Timing attack prevention - sempre executa bcrypt.compare
+    // Timing attack prevention
     const admin = admins[0];
     const dummyHash = '$2a$12$dummy.hash.for.timing.attack.prevention.here';
     const senhaHash = admin ? admin.senha : dummyHash;
