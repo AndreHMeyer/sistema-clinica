@@ -69,23 +69,18 @@ exports.criarConvenio = async (req, res) => {
   try {
     const { nome, codigo } = req.body;
 
-    // Validações de entrada
     if (!nome) {
       return res.status(400).json({ error: 'Nome do convênio é obrigatório' });
     }
 
-    // Validar nome (mínimo 2, máximo 100 caracteres)
     if (!validators.isValidName(nome)) {
       return res.status(400).json({ error: 'Nome deve ter entre 2 e 100 caracteres' });
     }
 
-    // Sanitizar e validar código (se fornecido)
     const codigoSanitizado = codigo ? String(codigo).substring(0, 50).trim().toUpperCase() : null;
 
-    // Normalizar nome
     const nomeSanitizado = nome.trim();
 
-    // Verificar se nome já existe (case insensitive)
     const [nomeExiste] = await db.query(
       'SELECT id FROM convenios WHERE LOWER(nome) = LOWER(?)',
       [nomeSanitizado]

@@ -1,7 +1,3 @@
-/**
- * Middlewares de Segurança
- */
-
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const hpp = require('hpp');
@@ -25,7 +21,7 @@ const securityHeaders = helmet({
       frameSrc: ["'none'"],
     },
   },
-  crossOriginEmbedderPolicy: false, // Necessário para algumas funcionalidades
+  crossOriginEmbedderPolicy: false,
   hsts: {
     maxAge: 31536000, // 1 ano
     includeSubDomains: true,
@@ -73,7 +69,7 @@ const registerLimiter = rateLimit({
 });
 
 // ==========================================
-// INPUT SANITIZATION - Proteção contra XSS/Injection
+// Proteção contra XSS/Injection
 // ==========================================
 const sanitizeInput = (req, res, next) => {
   // Sanitizar body
@@ -86,7 +82,6 @@ const sanitizeInput = (req, res, next) => {
     req.query = sanitizeObject(req.query);
   }
   
-  // Sanitizar params
   if (req.params) {
     req.params = sanitizeObject(req.params);
   }
@@ -94,7 +89,6 @@ const sanitizeInput = (req, res, next) => {
   next();
 };
 
-// Função recursiva para sanitizar objetos
 const sanitizeObject = (obj) => {
   if (typeof obj === 'string') {
     // Remove HTML tags e escapa caracteres perigosos
@@ -102,7 +96,7 @@ const sanitizeObject = (obj) => {
       allowedTags: [],
       allowedAttributes: {}
     });
-    // Trim whitespace
+
     sanitized = sanitized.trim();
     return sanitized;
   }
@@ -115,7 +109,6 @@ const sanitizeObject = (obj) => {
     const sanitized = {};
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        // Sanitiza também as chaves (previne prototype pollution)
         const safeKey = sanitizeHtml(key, { allowedTags: [], allowedAttributes: {} });
         if (safeKey !== '__proto__' && safeKey !== 'constructor' && safeKey !== 'prototype') {
           sanitized[safeKey] = sanitizeObject(obj[key]);
@@ -178,7 +171,6 @@ const validators = {
     }) && senha.length <= 20;
   },
 
-  // Validar ID numérico (previne SQL injection)
   isValidId: (id) => {
     if (id === undefined || id === null) return false;
     const numId = Number(id);
@@ -211,7 +203,6 @@ const validators = {
     return /^[A-Za-z0-9]{4,20}$/.test(crm.trim());
   },
 
-  // Validar nome (sem caracteres especiais perigosos)
   isValidName: (name) => {
     if (!name || typeof name !== 'string') return false;
     const trimmed = name.trim();

@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const config = require('./config/config');
 
-// Importar middlewares de segurança
 const {
   securityHeaders,
   generalLimiter,
@@ -12,7 +11,6 @@ const {
   corsOptions
 } = require('./middlewares/security');
 
-// Importar rotas
 const authRoutes = require('./routes/authRoutes');
 const consultaRoutes = require('./routes/consultaRoutes');
 const medicoAuthRoutes = require('./routes/medicoAuthRoutes');
@@ -25,29 +23,14 @@ const app = express();
 // MIDDLEWARES DE SEGURANÇA
 // ==========================================
 
-// Security Headers (Helmet)
 app.use(securityHeaders);
-
-// CORS Seguro
 app.use(cors(corsOptions));
-
-// Rate Limiting geral
 app.use(generalLimiter);
-
-// HPP Protection
 app.use(hppProtection);
-
-// Parse JSON com limite de tamanho
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
-
-// Sanitização de inputs
 app.use(sanitizeInput);
-
-// Security Logging
 app.use(securityLogger);
-
-// Desabilitar header X-Powered-By
 app.disable('x-powered-by');
 
 // ==========================================
@@ -89,7 +72,6 @@ app.use((err, req, res, next) => {
     ip: req.ip
   });
 
-  // Não expor detalhes do erro em produção
   const isProduction = process.env.NODE_ENV === 'production';
   
   res.status(err.status || 500).json({ 

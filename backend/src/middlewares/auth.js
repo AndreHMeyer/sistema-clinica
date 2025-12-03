@@ -1,9 +1,6 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/config');
 
-/**
- * Middleware de Autenticação JWT
- */
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
@@ -23,7 +20,6 @@ const authMiddleware = (req, res, next) => {
     return res.status(401).json({ error: 'Token mal formatado' });
   }
 
-  // Validar tamanho máximo do token (previne DoS)
   if (token.length > 500) {
     return res.status(401).json({ error: 'Token inválido' });
   }
@@ -34,12 +30,10 @@ const authMiddleware = (req, res, next) => {
       maxAge: config.jwt.expiresIn
     });
     
-    // Validar payload do token
     if (!decoded.id || !decoded.type) {
       return res.status(401).json({ error: 'Token inválido' });
     }
 
-    // Validar tipo de usuário permitido
     const allowedTypes = ['paciente', 'medico', 'admin'];
     if (!allowedTypes.includes(decoded.type)) {
       return res.status(401).json({ error: 'Token inválido' });
@@ -58,9 +52,6 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-/**
- * Middleware para verificar se é paciente
- */
 const isPaciente = (req, res, next) => {
   if (req.userType !== 'paciente') {
     console.warn(`[ACCESS] Tentativa de acesso negado - UserType: ${req.userType} - Route: ${req.path} - IP: ${req.ip}`);
@@ -69,9 +60,6 @@ const isPaciente = (req, res, next) => {
   return next();
 };
 
-/**
- * Middleware para verificar se é médico
- */
 const isMedico = (req, res, next) => {
   if (req.userType !== 'medico') {
     console.warn(`[ACCESS] Tentativa de acesso negado - UserType: ${req.userType} - Route: ${req.path} - IP: ${req.ip}`);
@@ -80,9 +68,6 @@ const isMedico = (req, res, next) => {
   return next();
 };
 
-/**
- * Middleware para verificar se é administrador
- */
 const isAdmin = (req, res, next) => {
   if (req.userType !== 'admin') {
     console.warn(`[ACCESS] Tentativa de acesso negado - UserType: ${req.userType} - Route: ${req.path} - IP: ${req.ip}`);

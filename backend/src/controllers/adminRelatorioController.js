@@ -9,17 +9,14 @@ exports.relatorioConsultasPeriodo = async (req, res) => {
   try {
     const { dataInicio, dataFim, medicoId, especialidadeId, status } = req.query;
 
-    // Validações de entrada
     if (!dataInicio || !dataFim) {
       return res.status(400).json({ error: 'Data início e data fim são obrigatórias' });
     }
 
-    // Validar formatos de data
     if (!validators.isValidDate(dataInicio) || !validators.isValidDate(dataFim)) {
       return res.status(400).json({ error: 'Formato de data inválido' });
     }
 
-    // Validar IDs se fornecidos
     if (medicoId && !validators.isValidId(medicoId)) {
       return res.status(400).json({ error: 'ID de médico inválido' });
     }
