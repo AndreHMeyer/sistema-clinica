@@ -188,7 +188,7 @@ export default function Register() {
               <input
                 type="password"
                 className={`form-input ${errors.senha ? 'border-red-500' : ''}`}
-                placeholder="8 a 20 caracteres alfanuméricos"
+                placeholder="8 a 20 caracteres"
                 {...register('senha', {
                   required: 'Senha é obrigatória',
                   minLength: {
@@ -199,12 +199,17 @@ export default function Register() {
                     value: 20,
                     message: 'Senha deve ter no máximo 20 caracteres'
                   },
-                  pattern: {
-                    value: /^[a-zA-Z0-9]+$/,
-                    message: 'Senha deve conter apenas letras e números'
+                  validate: {
+                    hasUppercase: value => /[A-Z]/.test(value) || 'Senha deve conter pelo menos uma letra maiúscula',
+                    hasLowercase: value => /[a-z]/.test(value) || 'Senha deve conter pelo menos uma letra minúscula',
+                    hasNumber: value => /[0-9]/.test(value) || 'Senha deve conter pelo menos um número',
+                    hasSymbol: value => /[!@#$%^&*(),.?":{}|<>]/.test(value) || 'Senha deve conter pelo menos um caractere especial (!@#$%^&*)'
                   }
                 })}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Deve conter: maiúscula, minúscula, número e caractere especial
+              </p>
               {errors.senha && <p className="form-error">{errors.senha.message}</p>}
             </div>
 
