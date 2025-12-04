@@ -8,23 +8,29 @@ export default function Perfil() {
   const { paciente, updateProfile } = useAuth();
   const [convenios, setConvenios] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [conveniosLoaded, setConveniosLoaded] = useState(false);
   const { register, handleSubmit, setValue, formState: { errors } } = useForm();
 
   useEffect(() => {
     loadConvenios();
-    if (paciente) {
+  }, []);
+
+  useEffect(() => {
+    if (paciente && conveniosLoaded) {
       setValue('nome', paciente.nome);
       setValue('telefone', paciente.telefone);
       setValue('convenio_id', paciente.convenio_id ? String(paciente.convenio_id) : '');
     }
-  }, [paciente, setValue]);
+  }, [paciente, conveniosLoaded, setValue]);
 
   const loadConvenios = async () => {
     try {
       const response = await api.get('/auth/convenios');
       setConvenios(response.data);
+      setConveniosLoaded(true);
     } catch (error) {
       console.error('Erro ao carregar convênios:', error);
+      setConveniosLoaded(true);
     }
   };
 

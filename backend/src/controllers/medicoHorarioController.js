@@ -71,17 +71,22 @@ exports.addHorario = async (req, res) => {
       return res.status(400).json({ error: 'Duração da consulta deve ser entre 10 e 120 minutos' });
     }
 
-    // Verificar conflito de horários no mesmo dia
+    // Verificar conflito de horários no mesmo dia (incluindo inativos para evitar duplicatas)
     const [conflitos] = await db.query(
-      `SELECT id FROM horarios_disponiveis 
-       WHERE medico_id = ? AND dia_semana = ? AND ativo = TRUE
+      `SELECT id, ativo FROM horarios_disponiveis 
+       WHERE medico_id = ? AND dia_semana = ?
        AND ((hora_inicio <= ? AND hora_fim > ?) OR (hora_inicio < ? AND hora_fim >= ?) 
             OR (hora_inicio >= ? AND hora_fim <= ?))`,
       [medicoId, diaSemanaNum, hora_inicio, hora_inicio, hora_fim, hora_fim, hora_inicio, hora_fim]
     );
 
     if (conflitos.length > 0) {
-      return res.status(400).json({ error: 'Já existe um horário cadastrado que conflita com este período' });
+      const conflitoAtivo = conflitos.find(c => c.ativo);
+      if (conflitoAtivo) {
+        return res.status(400).json({ error: 'Já existe um horário cadastrado que conflita com este período' });
+      } else {
+        return res.status(400).json({ error: 'Já existe um horário inativo neste período. Reative-o ou exclua-o primeiro.' });
+      }
     }
 
     // Inserir horário
